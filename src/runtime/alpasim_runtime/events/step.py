@@ -7,6 +7,8 @@ Commits all computed state to RolloutState, logs actor poses, and clears
 StepContext. This is the only event that mutates trajectory state.
 """
 
+from alpasim_runtime.ego_state_udp import ego_state_udp_exporter
+
 import time
 
 import numpy as np
@@ -58,6 +60,8 @@ class StepEvent(RecurringEvent):
             state.ego_trajectory_estimate = state.ego_trajectory_estimate.concat(
                 ctx.ego_estimated
             )
+
+            ego_state_udp_exporter.publish(state.ego_trajectory)
 
             # Commit accumulated traffic trajectories
             for obj_id, accumulated_traj in ctx.traffic_trajectories.items():
