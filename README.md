@@ -1,3 +1,42 @@
+uv run alpasim_wizard \
+  deploy=local \
+  topology=1gpu \
+  driver=vavam \
+  wizard.log_dir=/home/lab/alpasim/runs \
+  wizard.run_method=NONE \
+  wizard.debug_flags.use_localhost=True \
+  runtime.simulation_config.n_rollouts=1
+
+sed -i \
+'s#/mnt/nre-data/scenesets/58747c33fd25a4c1b3ab10ed92536a1a#/home/lab/alpasim/data/nre-artifacts/scenesets/58747c33fd25a4c1b3ab10ed92536a1a#g' \
+/home/lab/alpasim/runs/generated-user-config-0.yaml
+
+cd runs
+
+docker compose -f docker-compose.yaml --profile sim up \
+  driver-0 controller-0 physics-0 renderer-0
+
+-------------------------------------------------------------------------------------
+cd src/runtime
+
+uv run python -m alpasim_runtime.simulate \
+  --user-config=../../runs/generated-user-config-0.yaml \
+  --network-config=../../runs/generated-network-config.yaml \
+  --log-dir=../../runs \
+  --eval-config=../../runs/eval-config.yaml \
+  --log-level=INFO
+
+
+
+
+
+
+
+
+
+
+
+
 # AlpaSim: A modular, lightweight, and data-driven research simulator for autonomous driving
 
 <div align="center">
