@@ -37,6 +37,10 @@ from alpasim_utils.geometry import (
 )
 from alpasim_utils.types import ImageWithMetadata
 
+from alpasim_runtime.camera_tcp import camera_tcp_exporter
+
+
+
 logger = logging.getLogger(__name__)
 
 
@@ -98,9 +102,35 @@ class DriverService(ServiceBase[EgodriverServiceStub]):
             "close_session", "driver", self.stub.close_session, close_request
         )
 
+    # async def submit_image(self, image: ImageWithMetadata) -> None:
+    #     """Submit an image observation for the current session."""
+    #     session_info = self._require_session_info()
+    #     request = RolloutCameraImage(
+    #         session_uuid=session_info.uuid,
+    #         camera_image=RolloutCameraImage.CameraImage(
+    #             frame_start_us=image.start_timestamp_us,
+    #             frame_end_us=image.end_timestamp_us,
+    #             image_bytes=image.image_bytes,
+    #             logical_id=image.camera_logical_id,
+    #         ),
+    #     )
+
+    #     await session_info.broadcaster.broadcast(LogEntry(driver_camera_image=request))
+
+    #     if self.skip:
+    #         return
+
+    #     await profiled_rpc_call(
+    #         "submit_image_observation",
+    #         "driver",
+    #         self.stub.submit_image_observation,
+    #         request,
+    #     )
+
     async def submit_image(self, image: ImageWithMetadata) -> None:
         """Submit an image observation for the current session."""
         session_info = self._require_session_info()
+
         request = RolloutCameraImage(
             session_uuid=session_info.uuid,
             camera_image=RolloutCameraImage.CameraImage(
@@ -111,7 +141,22 @@ class DriverService(ServiceBase[EgodriverServiceStub]):
             ),
         )
 
-        await session_info.broadcaster.broadcast(LogEntry(driver_camera_image=request))
+        # Export all four rendered camera images to the external ROS bridge.
+        # This is asynchronous and does not wait for a ROS subscriber.
+        camera_tcp_exporter.publish(image)
+
+        # Keep all four images in the Runtime broadcaster/log stream.
+        await session_info.broadcaster.broadcast(
+            LogEntry(driver_camera_image=request)
+        )
+
+        # VaVAM consumes only the front-wide camera.
+        if image.camera_logical_id != "camera_front_wide_120fov":
+            logger.debug(
+                "Skipping camera %s for VaVAM driver submission",
+                image.camera_logical_id,
+            )
+            return
 
         if self.skip:
             return

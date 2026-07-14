@@ -16,6 +16,7 @@ cd runs/ros2_pub
 docker compose -f docker-compose.yaml --profile sim up \
   driver-0 controller-0 physics-0 renderer-0
 
+
 -------------------------------------------------------------------------------------
 cd src/runtime
 
@@ -25,6 +26,65 @@ uv run python -m alpasim_runtime.simulate \
   --log-dir=../../runs/ros2_pub \
   --eval-config=../../runs/ros2_pub/eval-config.yaml \
   --log-level=INFO
+-------------------------------------------------------------------------------------
+
+
+
+
+你的总体路线很清晰，而且顺序合理：
+
+获取全部可观测数据
+  ego state
+  多摄像头
+  周围交通参与者
+  地图/环境
+搞清外部控制接口
+  trajectory / waypoints
+  controller
+  physics
+导出评估信息
+  collision
+  offroad
+  progress
+  route deviation
+最后替换成自己的端到端模型
+
+阶段 1B：四摄像头
+阶段 1C：周围 actors
+阶段 1D：地图和 route
+阶段 1E：LiDAR 可行性探索
+
+-------------------------------------------------------------------------------------
+阶段 1B：四摄像头
+
+uv run python add_four_cameras.py
+
+
+docker compose -f docker-compose.yaml --profile sim down \
+  --remove-orphans
+
+docker compose -f docker-compose.yaml --profile sim up \
+  driver-0 controller-0 physics-0 renderer-0
+
+
+
+cd /home/lab/alpasim/src/runtime
+
+uv run python -m alpasim_runtime.simulate \
+  --user-config=../../runs/ros2_pub/generated-user-config-0.yaml \
+  --network-config=../../runs/ros2_pub/generated-network-config.yaml \
+  --log-dir=../../runs/ros2_pub \
+  --eval-config=../../runs/ros2_pub/eval-config.yaml \
+  --log-level=INFO \
+  2>&1 | tee ../../runs/ros2_pub/runtime_four_cameras.log
+
+
+
+
+
+
+
+
 
 
 
