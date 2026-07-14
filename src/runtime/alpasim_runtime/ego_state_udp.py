@@ -53,7 +53,9 @@ class EgoStateUdpExporter:
 
         message = {
             "timestamp_us": timestamp_us,
-            "frame_id": "alpasim_local",
+            "pose_frame_id": "map",
+            "child_frame_id": "base_link",
+            "dynamics_frame_id": "base_link",
 
             "position": {
                 "x": float(position[0]),
