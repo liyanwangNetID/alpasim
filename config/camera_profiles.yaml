@@ -1,0 +1,24 @@
+profiles:
+
+  alpamayo_4cam:
+    description: >
+      Alpamayo-compatible four-camera layout:
+      cross-left, front-wide, front-tele, cross-right.
+
+    cameras:
+      - camera_cross_left_120fov
+      - camera_front_wide_120fov
+      - camera_front_tele_30fov
+      - camera_cross_right_120fov
+
+  surround_5cam:
+    description: >
+      Five-camera research layout:
+      Alpamayo-compatible four cameras plus rear camera.
+
+    cameras:
+      - camera_cross_left_120fov
+      - camera_front_wide_120fov
+      - camera_front_tele_30fov
+      - camera_cross_right_120fov
+      - camera_rear_left_70fov

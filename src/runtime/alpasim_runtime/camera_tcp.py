@@ -8,11 +8,13 @@ import socket
 import struct
 import threading
 import time
-from typing import Any
+from typing import Any, Iterable
+
+from google.protobuf.json_format import MessageToDict
 
 
 class CameraTcpExporter:
-    """Send rendered camera frames without blocking the simulation loop."""
+    """Send rendered camera frames and calibration metadata."""
 
     def __init__(
         self,
@@ -21,9 +23,12 @@ class CameraTcpExporter:
         queue_size: int = 16,
     ) -> None:
         self.destination = (host, port)
-        self.queue: queue.Queue[tuple[dict[str, Any], bytes]] = queue.Queue(
-            maxsize=queue_size
-        )
+
+        self.queue: queue.Queue[
+            tuple[dict[str, Any], bytes]
+        ] = queue.Queue(maxsize=queue_size)
+
+        self.calibrations: dict[str, dict[str, Any]] = {}
 
         self.socket: socket.socket | None = None
         self.stop_event = threading.Event()
@@ -35,12 +40,46 @@ class CameraTcpExporter:
         )
         self.thread.start()
 
+    def set_calibrations(
+        self,
+        available_cameras: Iterable[Any],
+    ) -> None:
+        """Store final CameraCatalog definitions indexed by logical ID."""
+
+        calibrations: dict[str, dict[str, Any]] = {}
+
+        for camera in available_cameras:
+            camera_dict = MessageToDict(
+                camera,
+                preserving_proto_field_name=True,
+                use_integers_for_enums=False,
+            )
+
+            logical_id = str(camera.logical_id)
+
+            calibrations[logical_id] = {
+                "logical_id": logical_id,
+                "available_camera": camera_dict,
+            }
+
+        self.calibrations = calibrations
+
+        print(
+            "Camera TCP exporter received calibrations:",
+            sorted(self.calibrations),
+        )
+
     def publish(self, image: Any) -> None:
-        """Queue one ImageWithMetadata value for transmission."""
+        """Queue one ImageWithMetadata for transmission."""
+
+        logical_id = str(image.camera_logical_id)
+
         header = {
-            "camera_logical_id": str(image.camera_logical_id),
+            "message_type": "camera_frame",
+            "camera_logical_id": logical_id,
             "start_timestamp_us": int(image.start_timestamp_us),
             "end_timestamp_us": int(image.end_timestamp_us),
+            "camera_metadata": self.calibrations.get(logical_id),
         }
 
         payload = bytes(image.image_bytes)
@@ -48,8 +87,9 @@ class CameraTcpExporter:
 
         try:
             self.queue.put_nowait(item)
+
         except queue.Full:
-            # Never block the AlpaSim event loop. Drop the oldest pending frame.
+            # Never block the AlpaSim event loop.
             try:
                 self.queue.get_nowait()
             except queue.Empty:
@@ -74,22 +114,23 @@ class CameraTcpExporter:
 
         sock.settimeout(None)
         self.socket = sock
+
         return True
 
-    def _send(self, header: dict[str, Any], payload: bytes) -> None:
+    def _send(
+        self,
+        header: dict[str, Any],
+        payload: bytes,
+    ) -> None:
         if self.socket is None:
             raise ConnectionError("Camera bridge is not connected")
 
         header_bytes = json.dumps(
             header,
             separators=(",", ":"),
+            allow_nan=False,
         ).encode("utf-8")
 
-        # Wire format:
-        # uint32 header length
-        # header JSON
-        # uint64 image byte length
-        # image bytes
         packet = (
             struct.pack("!I", len(header_bytes))
             + header_bytes
@@ -110,8 +151,6 @@ class CameraTcpExporter:
                     continue
 
             if self.socket is None and not self._connect():
-                # ROS bridge is not running. Drop this stale frame and retry
-                # with a later image without affecting the simulation.
                 pending = None
                 time.sleep(0.2)
                 continue
@@ -119,6 +158,7 @@ class CameraTcpExporter:
             try:
                 self._send(*pending)
                 pending = None
+
             except OSError:
                 self._close_socket()
                 pending = None
@@ -130,6 +170,7 @@ class CameraTcpExporter:
                 self.socket.close()
             except OSError:
                 pass
+
             self.socket = None
 
 

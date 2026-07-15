@@ -57,6 +57,7 @@ uv run python -m alpasim_runtime.simulate \
 -------------------------------------------------------------------------------------
 阶段 1B：四摄像头
 
+cd /home/lab/alpasim
 uv run python add_four_cameras.py
 
 
@@ -78,6 +79,18 @@ uv run python -m alpasim_runtime.simulate \
   --log-level=INFO \
   2>&1 | tee ../../runs/ros2_pub/runtime_four_cameras.log
 
+
+
+cd /home/lab/alpasim
+
+uv run python apply_camera_profile.py \
+  --profile alpamayo_4cam \
+  --run-dir /home/lab/alpasim/runs/ros2_pub
+
+
+uv run python apply_camera_profile.py \
+  --profile surround_5cam \
+  --run-dir /home/lab/alpasim/runs/ros2_pub
 
 
 

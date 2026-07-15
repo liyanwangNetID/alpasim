@@ -81,6 +81,10 @@ class DriverService(ServiceBase[EgodriverServiceStub]):
             rollout_spec=rollout_spec,
         )
 
+        camera_tcp_exporter.set_calibrations(
+            request.rollout_spec.vehicle.available_cameras
+        )
+
         await session_info.broadcaster.broadcast(
             LogEntry(driver_session_request=request)
         )
