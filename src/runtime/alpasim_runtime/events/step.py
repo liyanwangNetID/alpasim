@@ -8,6 +8,7 @@ StepContext. This is the only event that mutates trajectory state.
 """
 
 from alpasim_runtime.ego_state_udp import ego_state_udp_exporter
+from alpasim_runtime.actor_tcp import actor_tcp_exporter
 
 import time
 
@@ -72,6 +73,189 @@ class StepEvent(RecurringEvent):
                     pose = accumulated_traj.get_pose(i)
                     state.traffic_objs[obj_id].trajectory.update_absolute(ts, pose)
 
+
+            # Export current actors after physics corrections are committed.
+            export_actor_states(
+                state,
+                self.timestamp_us,
+            )
+
+
+            # if not hasattr(self, "_printed_actor_debug"):
+            #     self._printed_actor_debug = True
+
+            #     traffic_objs = state.traffic_objs
+
+            #     print("\n========== TRAFFIC OBJECTS DEBUG ==========")
+            #     print("traffic_objs type:", type(traffic_objs))
+            #     print("traffic_objs len:", len(traffic_objs))
+            #     print("track IDs:", list(traffic_objs.keys())[:20])
+
+            #     # Find the first actor with a non-empty trajectory.
+            #     selected = None
+
+            #     # Prefer a dynamic actor whose trajectory is valid at the current time.
+            #     for track_id, actor in traffic_objs.items():
+            #         trajectory = actor.trajectory
+
+            #         if actor.is_static:
+            #             continue
+
+            #         if len(trajectory) == 0:
+            #             continue
+
+            #         time_range = trajectory.time_range_us
+
+            #         if self.timestamp_us in time_range:
+            #             selected = (track_id, actor)
+            #             break
+
+            #     # Fallback: take any actor with a non-empty trajectory.
+            #     if selected is None:
+            #         for track_id, actor in traffic_objs.items():
+            #             if len(actor.trajectory) > 0:
+            #                 selected = (track_id, actor)
+            #                 break
+
+            #     if selected is None:
+            #         print("No actor with a non-empty trajectory was found.")
+            #     else:
+            #         track_id, actor = selected
+            #         trajectory = actor.trajectory
+
+            #         print("\n========== ONE ACTIVE TRAFFIC ACTOR ==========")
+            #         print("track_id:", track_id)
+            #         print("actor type:", type(actor))
+            #         print("label_class:", actor.label_class)
+            #         print("is_static:", actor.is_static)
+
+            #         print(
+            #             "aabb:",
+            #             {
+            #                 "x": actor.aabb.x,
+            #                 "y": actor.aabb.y,
+            #                 "z": actor.aabb.z,
+            #             },
+            #         )
+
+            #         print("trajectory type:", type(trajectory))
+            #         print("trajectory len:", len(trajectory))
+            #         print("time range:", trajectory.time_range_us)
+            #         print("timestamps shape:", trajectory.timestamps_us.shape)
+            #         print("positions shape:", trajectory.positions.shape)
+            #         print("quaternions shape:", trajectory.quaternions.shape)
+
+            #         # Select the pose at the current StepEvent timestamp.
+            #         time_range = trajectory.time_range_us
+
+            #         if self.timestamp_us in time_range:
+            #             query_ts = np.array(
+            #                 [self.timestamp_us],
+            #                 dtype=np.uint64,
+            #             )
+
+            #             sampled = trajectory.interpolate(query_ts)
+
+            #             print("sample timestamp:", self.timestamp_us)
+            #             print("sample position:", sampled.positions[0])
+            #             print("sample quaternion:", sampled.quaternions[0])
+
+            #             # Inspect derived trajectory dynamics.
+            #             try:
+            #                 velocities = trajectory.velocities()
+
+            #                 print("velocities type:", type(velocities))
+            #                 print("velocities shape:", velocities.shape)
+            #                 print("velocities:")
+            #                 print(velocities)
+            #             except Exception as exc:
+            #                 print("velocity unavailable:", repr(exc))
+
+            #             try:
+            #                 accelerations = trajectory.accelerations()
+
+            #                 print("accelerations type:", type(accelerations))
+            #                 print("accelerations shape:", accelerations.shape)
+            #                 print("accelerations:")
+            #                 print(accelerations)
+            #             except Exception as exc:
+            #                 print("acceleration unavailable:", repr(exc))
+
+            #             try:
+            #                 yaws = trajectory.yaws
+
+            #                 print("yaws type:", type(yaws))
+            #                 print("yaws shape:", yaws.shape)
+            #                 print("yaws:")
+            #                 print(yaws)
+            #             except Exception as exc:
+            #                 print("yaw unavailable:", repr(exc))
+
+            #             try:
+            #                 yaw_rates = trajectory.yaw_rates()
+
+            #                 print("yaw_rates type:", type(yaw_rates))
+            #                 print("yaw_rates shape:", yaw_rates.shape)
+            #                 print("yaw_rates:")
+            #                 print(yaw_rates)
+            #             except Exception as exc:
+            #                 print("yaw rate unavailable:", repr(exc))
+
+            #             try:
+            #                 yaw_accelerations = trajectory.yaw_accelerations()
+
+            #                 print(
+            #                     "yaw_accelerations type:",
+            #                     type(yaw_accelerations),
+            #                 )
+            #                 print(
+            #                     "yaw_accelerations shape:",
+            #                     yaw_accelerations.shape,
+            #                 )
+            #                 print("yaw_accelerations:")
+            #                 print(yaw_accelerations)
+            #             except Exception as exc:
+            #                 print(
+            #                     "yaw acceleration unavailable:",
+            #                     repr(exc),
+            #                 )
+                            
+            #         else:
+            #             print(
+            #                 "Selected trajectory is not valid at current timestamp:",
+            #                 self.timestamp_us,
+            #             )
+
+            #         print("==============================================")
+
+            #     # Also inspect several label classes and static/dynamic counts.
+            #     label_counts = {}
+            #     static_count = 0
+            #     dynamic_count = 0
+            #     nonempty_count = 0
+
+            #     for actor in traffic_objs.values():
+            #         label_counts[actor.label_class] = (
+            #             label_counts.get(actor.label_class, 0) + 1
+            #         )
+
+            #         if actor.is_static:
+            #             static_count += 1
+            #         else:
+            #             dynamic_count += 1
+
+            #         if len(actor.trajectory) > 0:
+            #             nonempty_count += 1
+
+            #     print("\n========== ACTOR SUMMARY ==========")
+            #     print("static actor count:", static_count)
+            #     print("dynamic actor count:", dynamic_count)
+            #     print("non-empty trajectory count:", nonempty_count)
+            #     print("label counts:", label_counts)
+            #     print("===================================\n")
+
+
+
             # Log actor poses at each intermediate timestamp
             await log_actor_poses(
                 state, ctx.ego_true.timestamps_us, self.services.broadcaster
@@ -122,6 +306,127 @@ class InitialStepEvent(Event):
         state.step_context = StepContext()
         state.step_wall_start = time.perf_counter()
 
+def _actor_point(
+    trajectory,
+    index: int,
+) -> dict:
+    timestamps = trajectory.timestamps_us
+    positions = trajectory.positions
+    quaternions = trajectory.quaternions
+
+    velocities = trajectory.velocities()
+    accelerations = trajectory.accelerations()
+    yaws = trajectory.yaws
+    yaw_rates = trajectory.yaw_rates()
+    yaw_accelerations = trajectory.yaw_accelerations()
+
+    velocity = velocities[index]
+
+    return {
+        "timestamp_us": int(timestamps[index]),
+
+        "position": {
+            "x": float(positions[index][0]),
+            "y": float(positions[index][1]),
+            "z": float(positions[index][2]),
+        },
+
+        "orientation": {
+            "x": float(quaternions[index][0]),
+            "y": float(quaternions[index][1]),
+            "z": float(quaternions[index][2]),
+            "w": float(quaternions[index][3]),
+        },
+
+        "linear_velocity": {
+            "x": float(velocity[0]),
+            "y": float(velocity[1]),
+            "z": float(velocity[2]),
+        },
+
+        "linear_acceleration": {
+            "x": float(accelerations[index][0]),
+            "y": float(accelerations[index][1]),
+            "z": float(accelerations[index][2]),
+        },
+
+        "yaw": float(yaws[index]),
+        "yaw_rate": float(yaw_rates[index]),
+        "yaw_acceleration": float(yaw_accelerations[index]),
+
+        "speed": float(np.linalg.norm(velocity)),
+    }
+
+def export_actor_states(
+    state: RolloutState,
+    timestamp_us: int,
+) -> None:
+    actors = []
+
+    for track_id, actor in state.traffic_objs.items():
+        trajectory = actor.trajectory
+
+        if len(trajectory) == 0:
+            continue
+
+        time_range = trajectory.time_range_us
+
+        if timestamp_us not in time_range:
+            continue
+
+        timestamps = trajectory.timestamps_us.astype(np.int64)
+
+        # Closest trajectory sample to current simulation time.
+        current_index = int(
+            np.argmin(
+                np.abs(timestamps - int(timestamp_us))
+            )
+        )
+
+        current_state = _actor_point(
+            trajectory,
+            current_index,
+        )
+
+        # Send all currently available points from t onward.
+        # ROS Bridge will crop according to its YAML parameters.
+        future_indices = np.nonzero(
+            timestamps >= int(timestamp_us)
+        )[0]
+
+        future_points = [
+            _actor_point(trajectory, int(index))
+            for index in future_indices
+        ]
+
+        actors.append(
+            {
+                "track_id": str(track_id),
+                "label_class": str(actor.label_class),
+                "is_static": bool(actor.is_static),
+
+                "dimensions": {
+                    "x": float(actor.aabb.x),
+                    "y": float(actor.aabb.y),
+                    "z": float(actor.aabb.z),
+                },
+
+                "current_state": current_state,
+                "available_future_points": future_points,
+            }
+        )
+
+    actor_tcp_exporter.publish(
+        {
+            "message_type": "actor_snapshot",
+            "timestamp_us": int(timestamp_us),
+
+            "pose_frame_id": "map",
+            "dynamics_frame_id": "map",
+
+            "actors": actors,
+        }
+    )
 
 async def log_actor_poses(
     state: RolloutState,
