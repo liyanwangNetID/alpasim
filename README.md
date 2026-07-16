@@ -93,9 +93,16 @@ uv run python apply_camera_profile.py \
   --run-dir /home/lab/alpasim/runs/ros2_pub
 
 
+-------------------------------------------------------------------------------------
+阶段 1D：地图和 route
 
+USDZ_PATH=(/home/lab/alpasim/data/nre-artifacts/scenesets/58747c33fd25a4c1b3ab10ed92536a1a/**/*.usdz([1]))
+printf '%s\n' "$USDZ_PATH"
 
+cd /home/lab/alpasim/src/runtime
 
+uv run python ../../inspect_scene_map.py "$USDZ_PATH" \
+  2>&1 | tee /home/lab/alpasim/map_inspection.txt
 
 
 
