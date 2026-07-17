@@ -24,6 +24,13 @@ from alpasim_runtime.events.state import RolloutState, ServiceBundle
 from alpasim_runtime.route_generator import RouteGenerator
 from alpasim_utils import geometry
 
+from alpasim_runtime.ground_truth_tcp import (
+    ground_truth_tcp_exporter,
+)
+from alpasim_runtime.navigation_tcp import (
+    navigation_tcp_exporter,
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -52,11 +59,21 @@ class PolicyEvent(RecurringEvent):
         self.camera_ids = camera_ids
         self.route_generator = route_generator
         self.send_recording_ground_truth = send_recording_ground_truth
+        self._ground_truth_export_requested = False
 
     async def run(self, state: RolloutState, queue: EventQueue) -> None:
         step_start_us = self.timestamp_us
         target_time_us = step_start_us + self.interval_us
         svc = self.services
+
+        if not self._ground_truth_export_requested:
+            self._ground_truth_export_requested = True
+
+            ground_truth_tcp_exporter.publish(
+                trajectory=state.unbound.gt_ego_trajectory,
+                scene_id=state.unbound.scene_id,
+                frame_id="map",
+            )
 
         # --- Step boundary: fill timing on existing StepContext ---
         assert (
@@ -101,13 +118,231 @@ class PolicyEvent(RecurringEvent):
             svc.driver.submit_trajectory(ego_trajectory, dynamic_states_in_rig)
         )
 
+        # if not hasattr(self, "_printed_gt_debug"):
+        #     self._printed_gt_debug = True
+
+        #     gt_traj = state.unbound.gt_ego_trajectory
+
+        #     timestamps = gt_traj.timestamps_us.astype(
+        #         np.int64
+        #     )
+
+        #     intervals_us = np.diff(timestamps)
+
+        #     current_index = int(
+        #         np.searchsorted(
+        #             timestamps,
+        #             step_start_us,
+        #             side="left",
+        #         )
+        #     )
+
+        #     print("\n========== GT EGO AUDIT ==========")
+        #     print("type:", type(gt_traj))
+        #     print("len:", len(gt_traj))
+        #     print("time range:", gt_traj.time_range_us)
+        #     print("timestamps shape:", timestamps.shape)
+        #     print("positions shape:", gt_traj.positions.shape)
+        #     print(
+        #         "quaternions shape:",
+        #         gt_traj.quaternions.shape,
+        #     )
+
+        #     print("first timestamp:", int(timestamps[0]))
+        #     print("last timestamp:", int(timestamps[-1]))
+
+        #     print(
+        #         "duration sec:",
+        #         (int(timestamps[-1]) - int(timestamps[0]))
+        #         / 1e6,
+        #     )
+
+        #     if len(intervals_us) > 0:
+        #         print(
+        #             "sample interval us:"
+        #             f" min={intervals_us.min()},"
+        #             f" median={np.median(intervals_us)},"
+        #             f" max={intervals_us.max()}"
+        #         )
+
+        #     print("current step timestamp:", step_start_us)
+        #     print(
+        #         "available future sec:",
+        #         (
+        #             int(timestamps[-1])
+        #             - int(step_start_us)
+        #         )
+        #         / 1e6,
+        #     )
+        #     print("current insertion index:", current_index)
+
+        #     if current_index < len(gt_traj):
+        #         print(
+        #             "current/future position sample:",
+        #             gt_traj.positions[
+        #                 current_index:
+        #                 current_index + 5
+        #             ],
+        #         )
+
+        #     try:
+        #         velocities = gt_traj.velocities()
+        #         print(
+        #             "velocities shape:",
+        #             velocities.shape,
+        #         )
+        #         print(
+        #             "velocities sample:",
+        #             velocities[
+        #                 current_index:
+        #                 current_index + 5
+        #             ],
+        #         )
+        #     except Exception as exc:
+        #         print(
+        #             "velocities unavailable:",
+        #             repr(exc),
+        #         )
+
+        #     try:
+        #         accelerations = gt_traj.accelerations()
+        #         print(
+        #             "accelerations shape:",
+        #             accelerations.shape,
+        #         )
+        #     except Exception as exc:
+        #         print(
+        #             "accelerations unavailable:",
+        #             repr(exc),
+        #         )
+
+        #     try:
+        #         print(
+        #             "yaw_rates shape:",
+        #             gt_traj.yaw_rates().shape,
+        #         )
+        #     except Exception as exc:
+        #         print(
+        #             "yaw rates unavailable:",
+        #             repr(exc),
+        #         )
+
+        #     print("==================================\n")
+
+        route_model_input = None
+        route_map = None
+
         if self.route_generator is not None:
-            pose_local_to_rig = state.ego_trajectory.last_pose
-            route = self.route_generator.generate_route(
-                step_start_us, pose_local_to_rig
+            pose_local_to_rig = (
+                state.ego_trajectory.last_pose
             )
-            route = RouteGenerator.prepare_for_policy(route)
-            ctx.track_task(svc.driver.submit_route(step_start_us, route))
+
+            route_generated = (
+                self.route_generator.generate_route(
+                    step_start_us,
+                    pose_local_to_rig,
+                )
+            )
+
+            route_model_input = (
+                RouteGenerator.prepare_for_policy(
+                    route_generated
+                )
+            )
+
+            # Preserve exactly the same waypoint indexing and
+            # validity as the actual Driver input, but express it
+            # in the true local/map frame.
+            route_map = route_model_input.transform(
+                pose_local_to_rig
+            )
+
+            ctx.track_task(
+                svc.driver.submit_route(
+                    step_start_us,
+                    route_model_input,
+                )
+            )
+
+            # route_generated = self.route_generator.generate_route(
+            #     step_start_us,
+            #     pose_local_to_rig,
+            # )
+
+            # route_model_input = RouteGenerator.prepare_for_policy(
+            #     route_generated,
+            # )
+
+            # ctx.track_task(
+            #     svc.driver.submit_route(
+            #         step_start_us,
+            #         route_model_input,
+            #     )
+            # )
+
+            # if not hasattr(self, "_printed_route_debug"):
+            #     self._printed_route_debug = True
+
+            #     route_map = route_model_input.transform(
+            #         pose_local_to_rig
+            #     )
+
+            #     print("\n========== ROUTE AUDIT ==========")
+            #     print(
+            #         "route generator:",
+            #         type(self.route_generator).__name__,
+            #     )
+            #     print(
+            #         "configured generator type:",
+            #         state.unbound.route_generator_type,
+            #     )
+            #     print(
+            #         "route start offset m:",
+            #         state.unbound.route_start_offset_m,
+            #     )
+            #     print("step_start_us:", step_start_us)
+
+            #     print("\nInternal full route in local/map:")
+            #     full_route = (
+            #         self.route_generator.route_polyline_in_local
+            #     )
+            #     print("  type:", type(full_route))
+            #     print("  len:", len(full_route))
+            #     print("  points shape:", full_route.points.shape)
+            #     print("  dimension:", full_route.dimension)
+            #     print("  first points:", full_route.points[:5])
+            #     print("  last points:", full_route.points[-5:])
+
+            #     print("\nGenerated route in rig:")
+            #     print("  type:", type(route_generated))
+            #     print("  len:", len(route_generated))
+            #     print(
+            #         "  points shape:",
+            #         route_generated.points.shape,
+            #     )
+            #     print(
+            #         "  points:",
+            #         route_generated.points,
+            #     )
+
+            #     print("\nPrepared model-input route:")
+            #     print("  type:", type(route_model_input))
+            #     print("  len:", len(route_model_input))
+            #     print(
+            #         "  points shape:",
+            #         route_model_input.points.shape,
+            #     )
+            #     print(
+            #         "  points:",
+            #         route_model_input.points,
+            #     )
+
+            #     print("\nPrepared route transformed to map:")
+            #     print("  len:", len(route_map))
+            #     print("  points shape:", route_map.points.shape)
+            #     print("  points:", route_map.points)
+
+            #     print("=================================\n")
 
         if self.send_recording_ground_truth:
             gt_traj = state.unbound.gt_ego_trajectory
@@ -122,11 +357,39 @@ class PolicyEvent(RecurringEvent):
         await ctx.drain_outstanding_tasks()
         state.last_egopose_update_us = step_start_us
 
-        if ctx.force_gt and state.unbound.skip_driver_during_force_gt:
+        if (
+            ctx.force_gt
+            and state.unbound.skip_driver_during_force_gt
+        ):
             state.data_sensorsim_to_driver = None
-            state.step_context.driver_trajectory = controller_reference_trajectory(
-                state.force_gt_trajectory, step_start_us
+
+            controller_reference = (
+                controller_reference_trajectory(
+                    state.force_gt_trajectory,
+                    step_start_us,
+                )
             )
+
+            state.step_context.driver_trajectory = (
+                controller_reference
+            )
+
+            navigation_tcp_exporter.publish_update(
+                reference_timestamp_us=step_start_us,
+                route_generator_type=(
+                    state.unbound.route_generator_type.name
+                ),
+                force_gt_active=True,
+                route_map=route_map,
+                route_model_input=route_model_input,
+                planned_trajectory=controller_reference,
+                plan_source="CONTROLLER_REFERENCE",
+                plan_producer=(
+                    "alpasim_force_gt_controller_reference"
+                ),
+                is_model_generated=False,
+            )
+
             return
 
         # --- Driver query ---
@@ -144,10 +407,94 @@ class PolicyEvent(RecurringEvent):
             raise EndSimulationException()
 
         # --- Transform from noisy to true local frame ---
-        drive_trajectory = transform_trajectory_from_noisy_to_true_local_frame(
-            state, drive_trajectory_noisy
+        drive_trajectory = (
+            transform_trajectory_from_noisy_to_true_local_frame(
+                state,
+                drive_trajectory_noisy,
+            )
         )
-        state.step_context.driver_trajectory = drive_trajectory
+
+        state.step_context.driver_trajectory = (
+            drive_trajectory
+        )
+
+        navigation_tcp_exporter.publish_update(
+            reference_timestamp_us=step_start_us,
+            route_generator_type=(
+                state.unbound.route_generator_type.name
+            ),
+            force_gt_active=bool(ctx.force_gt),
+            route_map=route_map,
+            route_model_input=route_model_input,
+            planned_trajectory=drive_trajectory,
+            plan_source="MODEL_PLANNING",
+            plan_producer="alpasim_driver",
+            is_model_generated=True,
+        )
+
+        # if not hasattr(self, "_printed_plan_debug"):
+        #     self._printed_plan_debug = True
+
+        #     print("\n========== MODEL PLAN AUDIT ==========")
+        #     print("step_start_us:", step_start_us)
+        #     print("target_time_us:", target_time_us)
+        #     print("force_gt:", ctx.force_gt)
+
+        #     print("\nNoisy driver output:")
+        #     print("  type:", type(drive_trajectory_noisy))
+        #     print("  len:", len(drive_trajectory_noisy))
+        #     print(
+        #         "  time range:",
+        #         drive_trajectory_noisy.time_range_us,
+        #     )
+        #     print(
+        #         "  timestamps:",
+        #         drive_trajectory_noisy.timestamps_us,
+        #     )
+        #     print(
+        #         "  positions shape:",
+        #         drive_trajectory_noisy.positions.shape,
+        #     )
+        #     print(
+        #         "  positions sample:",
+        #         drive_trajectory_noisy.positions[:5],
+        #     )
+        #     print(
+        #         "  quaternions sample:",
+        #         drive_trajectory_noisy.quaternions[:5],
+        #     )
+
+        #     print("\nTrue-local model plan:")
+        #     print("  len:", len(drive_trajectory))
+        #     print(
+        #         "  time range:",
+        #         drive_trajectory.time_range_us,
+        #     )
+        #     print(
+        #         "  timestamps:",
+        #         drive_trajectory.timestamps_us,
+        #     )
+        #     print(
+        #         "  positions sample:",
+        #         drive_trajectory.positions[:5],
+        #     )
+        #     print(
+        #         "  quaternions sample:",
+        #         drive_trajectory.quaternions[:5],
+        #     )
+
+        #     try:
+        #         print(
+        #             "  velocities shape:",
+        #             drive_trajectory.velocities().shape,
+        #         )
+        #     except Exception as exc:
+        #         print(
+        #             "  velocities unavailable:",
+        #             repr(exc),
+        #         )
+
+        #     print("======================================\n")
 
 
 # ---------------------------------------------------------------------------
