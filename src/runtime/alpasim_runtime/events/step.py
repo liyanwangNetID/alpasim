@@ -9,7 +9,9 @@ StepContext. This is the only event that mutates trajectory state.
 
 from alpasim_runtime.ego_state_udp import ego_state_udp_exporter
 from alpasim_runtime.actor_tcp import actor_tcp_exporter
+from alpasim_runtime.map_tcp import map_tcp_exporter
 
+import logging
 import time
 
 import numpy as np
@@ -21,6 +23,8 @@ from alpasim_runtime.telemetry.telemetry_context import try_get_context
 from alpasim_utils import geometry
 from numpy.typing import NDArray
 
+
+logger = logging.getLogger(__name__)
 
 class StepEvent(RecurringEvent):
     """Close the current step and open the next.
@@ -41,7 +45,29 @@ class StepEvent(RecurringEvent):
         self.interval_us = control_timestep_us
         self.services = services
 
+        # Avoid checking and serializing the same map on every simulation step.
+        self._map_export_requested = False
+
     async def run(self, state: RolloutState, queue: EventQueue) -> None:
+        if not self._map_export_requested:
+            self._map_export_requested = True
+
+            vector_map = state.unbound.vector_map
+
+            if vector_map is None:
+                logger.warning(
+                    "Scene %s has no VectorMap; "
+                    "skipping ROS map export",
+                    state.unbound.scene_id,
+                )
+            else:
+                map_tcp_exporter.publish_vector_map(
+                    scene_id=state.unbound.scene_id,
+                    vector_map=vector_map,
+                    frame_id="map",
+                )
+
+
         ctx = state.step_context
 
         if ctx is not None and ctx.ego_true is not None:
