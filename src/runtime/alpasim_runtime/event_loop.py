@@ -9,6 +9,8 @@ queue, allowing each one to run at its own cadence.
 
 from __future__ import annotations
 
+import asyncio
+
 import contextlib
 import logging
 import os
@@ -78,6 +80,111 @@ def _build_traffic_session_trajectory(unbound: UnboundRollout) -> geometry.Traje
 def _simulated_duration_us(unbound: UnboundRollout) -> int:
     """Return the effective simulated span covered by this rollout."""
     return unbound.end_timestamp_us - unbound.egomotion_context_start_us
+
+
+@dataclass
+class WallClockPacer:
+    """Synchronize simulation timestamps with monotonic wall-clock time.
+
+    realtime_factor meanings:
+
+      0.0: disabled; run as fast as possible
+      1.0: real time
+      0.5: half real-time speed
+      2.0: twice real-time speed
+
+    The first event establishes both the simulation-time anchor and
+    the monotonic wall-clock anchor.
+    """
+
+    realtime_factor: float
+
+    simulation_start_us: int | None = None
+    wall_start_seconds: float | None = None
+
+    total_sleep_seconds: float = 0.0
+    maximum_lag_seconds: float = 0.0
+
+    def __post_init__(self) -> None:
+        self.realtime_factor = float(
+            self.realtime_factor
+        )
+
+        if self.realtime_factor < 0.0:
+            raise ValueError(
+                "realtime_factor must be non-negative, "
+                f"got {self.realtime_factor}"
+            )
+
+    @property
+    def enabled(self) -> bool:
+        return self.realtime_factor > 0.0
+
+    async def wait_until(
+        self,
+        simulation_timestamp_us: int,
+    ) -> None:
+        """Wait until the wall-clock target for a simulation timestamp."""
+        if not self.enabled:
+            return
+
+        simulation_timestamp_us = int(
+            simulation_timestamp_us
+        )
+
+        if self.simulation_start_us is None:
+            self.simulation_start_us = (
+                simulation_timestamp_us
+            )
+            self.wall_start_seconds = (
+                time.monotonic()
+            )
+            return
+
+        assert self.wall_start_seconds is not None
+
+        simulation_elapsed_seconds = (
+            simulation_timestamp_us
+            - self.simulation_start_us
+        ) / 1_000_000.0
+
+        if simulation_elapsed_seconds < 0.0:
+            raise ValueError(
+                "Simulation timestamp moved backwards inside "
+                "one event loop: "
+                f"current={simulation_timestamp_us}, "
+                f"start={self.simulation_start_us}"
+            )
+
+        target_wall_elapsed_seconds = (
+            simulation_elapsed_seconds
+            / self.realtime_factor
+        )
+
+        actual_wall_elapsed_seconds = (
+            time.monotonic()
+            - self.wall_start_seconds
+        )
+
+        sleep_seconds = (
+            target_wall_elapsed_seconds
+            - actual_wall_elapsed_seconds
+        )
+
+        if sleep_seconds > 0.0:
+            await asyncio.sleep(sleep_seconds)
+
+            self.total_sleep_seconds += (
+                sleep_seconds
+            )
+            return
+
+        lag_seconds = -sleep_seconds
+
+        self.maximum_lag_seconds = max(
+            self.maximum_lag_seconds,
+            lag_seconds,
+        )
 
 
 @dataclass
@@ -548,14 +655,48 @@ class EventBasedRollout:
             state = self._create_rollout_state()
             event_queue = self._create_initial_events()
 
+            wall_clock_pacer = WallClockPacer(
+                realtime_factor=(
+                    self.unbound.realtime_factor
+                )
+            )
+
+            if wall_clock_pacer.enabled:
+                logger.info(
+                    "Wall-clock pacing enabled: "
+                    "realtime_factor=%.3f",
+                    wall_clock_pacer.realtime_factor,
+                )
+            else:
+                logger.info(
+                    "Wall-clock pacing disabled; "
+                    "simulation will run as fast as possible"
+                )
+
             # Main event loop
             try:
                 while event_queue:
                     event = event_queue.pop()
-                    logger.info(
-                        f"sim_time {event.timestamp_us:_}us: {event.description()}"
+
+                    await wall_clock_pacer.wait_until(
+                        event.timestamp_us
                     )
-                    await event.handle(state, event_queue)
+
+                    logger.info(
+                        f"sim_time {event.timestamp_us:_}us: "
+                        f"{event.description()}"
+                    )
+
+                    await event.handle(
+                        state,
+                        event_queue,
+                    )
+                # while event_queue:
+                #     event = event_queue.pop()
+                #     logger.info(
+                #         f"sim_time {event.timestamp_us:_}us: {event.description()}"
+                #     )
+                #     await event.handle(state, event_queue)
             except EndSimulationException:
                 logger.info("Simulation ended via SimulationEndEvent")
             except Exception:
@@ -603,6 +744,19 @@ class EventBasedRollout:
                 realtime_ratio,
                 rollout_duration,
             )
+
+            if wall_clock_pacer.enabled:
+                logger.info(
+                    "Wall-clock pacing summary: "
+                    "configured_factor=%.3f, "
+                    "actual_factor=%.3f, "
+                    "total_sleep=%.3fs, "
+                    "maximum_lag=%.3fs",
+                    wall_clock_pacer.realtime_factor,
+                    realtime_ratio,
+                    wall_clock_pacer.total_sleep_seconds,
+                    wall_clock_pacer.maximum_lag_seconds,
+                )
 
         return eval_result
 

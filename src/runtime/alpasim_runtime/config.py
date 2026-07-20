@@ -286,6 +286,17 @@ class SimulationConfig:
     n_rollouts: int = MISSING
 
     control_timestep_us: int = 100_000
+
+    # Wall-clock pacing factor.
+    #
+    # 0.0: unlimited, run as fast as possible
+    # 1.0: one simulation second per wall-clock second
+    # 0.5: one simulation second per two wall-clock seconds
+    # 2.0: two simulation seconds per wall-clock second
+    realtime_factor: float = 0.0
+
+
+
     pose_reporting_interval_us: int = 0  # 0 = no intermediate reporting
     force_gt_duration_us: int = 500_000  # 0.5s
     skip_driver_during_force_gt: bool = False

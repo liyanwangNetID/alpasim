@@ -173,6 +173,7 @@ class UnboundRollout:
     physics_update_mode: PhysicsUpdateMode
     save_path_root: str
     control_timestep_us: int
+    realtime_factor: float
     pose_reporting_interval_us: int
     camera_configs: list[RuntimeCameraConfig]
     first_camera_frame_ranges_us: dict[str, range]
@@ -212,6 +213,13 @@ class UnboundRollout:
     ) -> UnboundRollout:
         """Create UnboundRollout from SceneDataSource."""
         camera_configs = list(simulation_config.cameras)
+
+        if simulation_config.realtime_factor < 0.0:
+            raise ValueError(
+                "realtime_factor must be non-negative, "
+                f"got {simulation_config.realtime_factor}"
+            )
+        
         renderer_service.validate_timing_alignment(simulation_config)
         timing = _build_rollout_timing(
             simulation_config,
@@ -288,6 +296,9 @@ class UnboundRollout:
             force_gt_duration_us=simulation_config.force_gt_duration_us,
             skip_driver_during_force_gt=simulation_config.skip_driver_during_force_gt,
             control_timestep_us=simulation_config.control_timestep_us,
+            realtime_factor=float(
+                simulation_config.realtime_factor
+            ),
             follow_log=None,
             save_path_root=os.path.join(rollouts_dir, scene_id),
             version_ids=version_ids,
