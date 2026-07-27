@@ -382,12 +382,12 @@ class PolicyEvent(RecurringEvent):
                 force_gt_active=True,
                 route_map=route_map,
                 route_model_input=route_model_input,
-                planned_trajectory=controller_reference,
-                plan_source="CONTROLLER_REFERENCE",
-                plan_producer=(
-                    "alpasim_force_gt_controller_reference"
-                ),
-                is_model_generated=False,
+                # planned_trajectory=controller_reference,
+                # plan_source="CONTROLLER_REFERENCE",
+                # plan_producer=(
+                #     "alpasim_force_gt_controller_reference"
+                # ),
+                # is_model_generated=False,
             )
 
             return
@@ -426,10 +426,10 @@ class PolicyEvent(RecurringEvent):
             force_gt_active=bool(ctx.force_gt),
             route_map=route_map,
             route_model_input=route_model_input,
-            planned_trajectory=drive_trajectory,
-            plan_source="MODEL_PLANNING",
-            plan_producer="alpasim_driver",
-            is_model_generated=True,
+            # planned_trajectory=drive_trajectory,
+            # plan_source="MODEL_PLANNING",
+            # plan_producer="alpasim_driver",
+            # is_model_generated=True,
         )
 
         # if not hasattr(self, "_printed_plan_debug"):

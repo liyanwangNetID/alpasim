@@ -180,147 +180,147 @@ def serialize_route(
     }
 
 
-def serialize_trajectory(
-    trajectory: Any,
-) -> dict[str, Any]:
-    """Serialize a map-frame model or controller trajectory."""
-    if trajectory is None or len(trajectory) == 0:
-        return {
-            "start_timestamp_us": 0,
-            "end_timestamp_us": 0,
-            "points": [],
-        }
+# def serialize_trajectory(
+#     trajectory: Any,
+# ) -> dict[str, Any]:
+#     """Serialize a map-frame model or controller trajectory."""
+#     if trajectory is None or len(trajectory) == 0:
+#         return {
+#             "start_timestamp_us": 0,
+#             "end_timestamp_us": 0,
+#             "points": [],
+#         }
 
-    timestamps = np.asarray(
-        trajectory.timestamps_us,
-        dtype=np.int64,
-    )
-    positions = np.asarray(
-        trajectory.positions,
-        dtype=np.float64,
-    )
-    quaternions = np.asarray(
-        trajectory.quaternions,
-        dtype=np.float64,
-    )
+#     timestamps = np.asarray(
+#         trajectory.timestamps_us,
+#         dtype=np.int64,
+#     )
+#     positions = np.asarray(
+#         trajectory.positions,
+#         dtype=np.float64,
+#     )
+#     quaternions = np.asarray(
+#         trajectory.quaternions,
+#         dtype=np.float64,
+#     )
 
-    velocities = np.asarray(
-        trajectory.velocities(),
-        dtype=np.float64,
-    )
-    accelerations = np.asarray(
-        trajectory.accelerations(),
-        dtype=np.float64,
-    )
-    yaws = np.asarray(
-        trajectory.yaws,
-        dtype=np.float64,
-    )
-    yaw_rates = np.asarray(
-        trajectory.yaw_rates(),
-        dtype=np.float64,
-    )
-    yaw_accelerations = np.asarray(
-        trajectory.yaw_accelerations(),
-        dtype=np.float64,
-    )
+#     velocities = np.asarray(
+#         trajectory.velocities(),
+#         dtype=np.float64,
+#     )
+#     accelerations = np.asarray(
+#         trajectory.accelerations(),
+#         dtype=np.float64,
+#     )
+#     yaws = np.asarray(
+#         trajectory.yaws,
+#         dtype=np.float64,
+#     )
+#     yaw_rates = np.asarray(
+#         trajectory.yaw_rates(),
+#         dtype=np.float64,
+#     )
+#     yaw_accelerations = np.asarray(
+#         trajectory.yaw_accelerations(),
+#         dtype=np.float64,
+#     )
 
-    count = len(timestamps)
+#     count = len(timestamps)
 
-    expected_shapes = {
-        "positions": (count, 3),
-        "quaternions": (count, 4),
-        "velocities": (count, 3),
-        "accelerations": (count, 3),
-        "yaws": (count,),
-        "yaw_rates": (count,),
-        "yaw_accelerations": (count,),
-    }
+#     expected_shapes = {
+#         "positions": (count, 3),
+#         "quaternions": (count, 4),
+#         "velocities": (count, 3),
+#         "accelerations": (count, 3),
+#         "yaws": (count,),
+#         "yaw_rates": (count,),
+#         "yaw_accelerations": (count,),
+#     }
 
-    arrays = {
-        "positions": positions,
-        "quaternions": quaternions,
-        "velocities": velocities,
-        "accelerations": accelerations,
-        "yaws": yaws,
-        "yaw_rates": yaw_rates,
-        "yaw_accelerations": yaw_accelerations,
-    }
+#     arrays = {
+#         "positions": positions,
+#         "quaternions": quaternions,
+#         "velocities": velocities,
+#         "accelerations": accelerations,
+#         "yaws": yaws,
+#         "yaw_rates": yaw_rates,
+#         "yaw_accelerations": yaw_accelerations,
+#     }
 
-    for name, expected_shape in expected_shapes.items():
-        if arrays[name].shape != expected_shape:
-            raise ValueError(
-                f"{name} has shape {arrays[name].shape}, "
-                f"expected {expected_shape}"
-            )
+#     for name, expected_shape in expected_shapes.items():
+#         if arrays[name].shape != expected_shape:
+#             raise ValueError(
+#                 f"{name} has shape {arrays[name].shape}, "
+#                 f"expected {expected_shape}"
+#             )
 
-    if np.any(np.diff(timestamps) <= 0):
-        raise ValueError(
-            "Planned trajectory timestamps must be "
-            "strictly increasing"
-        )
+#     if np.any(np.diff(timestamps) <= 0):
+#         raise ValueError(
+#             "Planned trajectory timestamps must be "
+#             "strictly increasing"
+#         )
 
-    serialized_points: list[
-        dict[str, Any]
-    ] = []
+#     serialized_points: list[
+#         dict[str, Any]
+#     ] = []
 
-    for index in range(count):
-        velocity = velocities[index]
-        speed = float(
-            np.linalg.norm(velocity)
-        )
+#     for index in range(count):
+#         velocity = velocities[index]
+#         speed = float(
+#             np.linalg.norm(velocity)
+#         )
 
-        yaw = float(yaws[index])
-        yaw_rate = float(yaw_rates[index])
-        yaw_acceleration = float(
-            yaw_accelerations[index]
-        )
+#         yaw = float(yaws[index])
+#         yaw_rate = float(yaw_rates[index])
+#         yaw_acceleration = float(
+#             yaw_accelerations[index]
+#         )
 
-        if not all(
-            math.isfinite(value)
-            for value in (
-                yaw,
-                yaw_rate,
-                yaw_acceleration,
-                speed,
-            )
-        ):
-            raise ValueError(
-                f"Non-finite trajectory state at index {index}"
-            )
+#         if not all(
+#             math.isfinite(value)
+#             for value in (
+#                 yaw,
+#                 yaw_rate,
+#                 yaw_acceleration,
+#                 speed,
+#             )
+#         ):
+#             raise ValueError(
+#                 f"Non-finite trajectory state at index {index}"
+#             )
 
-        serialized_points.append(
-            {
-                "timestamp_us": int(
-                    timestamps[index]
-                ),
-                "position": _vector3(
-                    positions[index],
-                    "position",
-                ),
-                "orientation": _quaternion(
-                    quaternions[index]
-                ),
-                "linear_velocity": _vector3(
-                    velocity,
-                    "linear_velocity",
-                ),
-                "linear_acceleration": _vector3(
-                    accelerations[index],
-                    "linear_acceleration",
-                ),
-                "yaw": yaw,
-                "yaw_rate": yaw_rate,
-                "yaw_acceleration": yaw_acceleration,
-                "speed": speed,
-            }
-        )
+#         serialized_points.append(
+#             {
+#                 "timestamp_us": int(
+#                     timestamps[index]
+#                 ),
+#                 "position": _vector3(
+#                     positions[index],
+#                     "position",
+#                 ),
+#                 "orientation": _quaternion(
+#                     quaternions[index]
+#                 ),
+#                 "linear_velocity": _vector3(
+#                     velocity,
+#                     "linear_velocity",
+#                 ),
+#                 "linear_acceleration": _vector3(
+#                     accelerations[index],
+#                     "linear_acceleration",
+#                 ),
+#                 "yaw": yaw,
+#                 "yaw_rate": yaw_rate,
+#                 "yaw_acceleration": yaw_acceleration,
+#                 "speed": speed,
+#             }
+#         )
 
-    return {
-        "start_timestamp_us": int(timestamps[0]),
-        "end_timestamp_us": int(timestamps[-1]),
-        "points": serialized_points,
-    }
+#     return {
+#         "start_timestamp_us": int(timestamps[0]),
+#         "end_timestamp_us": int(timestamps[-1]),
+#         "points": serialized_points,
+#     }
 
 
 class NavigationTcpExporter:
@@ -359,10 +359,10 @@ class NavigationTcpExporter:
         force_gt_active: bool,
         route_map: Any,
         route_model_input: Any,
-        planned_trajectory: Any,
-        plan_source: str,
-        plan_producer: str,
-        is_model_generated: bool,
+        # planned_trajectory: Any,
+        # plan_source: str,
+        # plan_producer: str,
+        # is_model_generated: bool,
     ) -> None:
         """Queue one complete current navigation update."""
         with self.sequence_lock:
@@ -390,9 +390,9 @@ class NavigationTcpExporter:
                 expected_point_count=20,
             )
 
-        trajectory_message = serialize_trajectory(
-            planned_trajectory
-        )
+        # trajectory_message = serialize_trajectory(
+        #     planned_trajectory
+        # )
 
         message = {
             "message_type": "navigation_update",
@@ -410,16 +410,16 @@ class NavigationTcpExporter:
             "route_model_input": (
                 route_model_input_message
             ),
-            "planned_trajectory": {
-                "pose_frame_id": "map",
-                "dynamics_frame_id": "map",
-                "source": str(plan_source),
-                "producer": str(plan_producer),
-                "is_model_generated": bool(
-                    is_model_generated
-                ),
-                **trajectory_message,
-            },
+            # "planned_trajectory": {
+            #     "pose_frame_id": "map",
+            #     "dynamics_frame_id": "map",
+            #     "source": str(plan_source),
+            #     "producer": str(plan_producer),
+            #     "is_model_generated": bool(
+            #         is_model_generated
+            #     ),
+            #     **trajectory_message,
+            # },
         }
 
         try:
