@@ -15,6 +15,7 @@ from .base import (
 )
 from .manual_model import ManualModel
 from .vam_model import VAMModel
+from .external_trajectory_model import ExternalTrajectoryModel
 
 __all__ = [
     "Alpamayo15Model",
@@ -27,4 +28,5 @@ __all__ = [
     "ModelPrediction",
     "PredictionInput",
     "VAMModel",
+    "ExternalTrajectoryModel",
 ]

@@ -106,10 +106,43 @@ uv run python ../../inspect_scene_map.py "$USDZ_PATH" \
 
 
 
+USDZ_PATH=(/home/lab/alpasim/data/nre-artifacts/scenesets/4dc47145d3a133ea0733fa30520aa46d/**/*.usdz([1]))
+printf '%s\n' "$USDZ_PATH"
 
 
+-------------------------------------------------------------------------------------
+手工driver
+clipgt-c14c031a-8c17-4d08-aa4d-23c020a6871e
+clipgt-01d503d4-449b-46fc-8d78-9085e70d3554
 
 
+uv run --project src/driver python -m alpasim_driver.main \
+  --config-path=/home/lab/alpasim/src/driver/configs \
+  --config-name=manual
+  
+uv run --project src/wizard alpasim_wizard \
+  deploy=local \
+  driver=manual \
+  driver_source=external_static \
+  topology=1gpu \
+  wizard.log_dir="$PWD/runs/manual_run_02" \
+  scenes.scene_ids='["clipgt-01d503d4-449b-46fc-8d78-9085e70d3554"]' \
+  wizard.external_services.driver='["172.23.0.1:6789"]'
+
+
+uv run --project src/wizard alpasim_wizard \
+  deploy=local \
+  driver=manual \
+  driver_source=external_static \
+  topology=1gpu \
+  wizard.log_dir="$PWD/runs/external_trajectory_run_01" \
+  scenes.scene_ids='["clipgt-01d503d4-449b-46fc-8d78-9085e70d3554"]' \
+  wizard.external_services.driver='["172.23.0.1:6789"]'
+
+
+uv run --project src/driver python -m alpasim_driver.main \
+  --config-path=/home/lab/alpasim/src/driver/configs \
+  --config-name=external_trajectory
 
 
 

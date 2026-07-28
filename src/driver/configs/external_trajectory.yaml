@@ -1,0 +1,31 @@
+# External Trajectory Driver Configuration
+#
+# This driver does not load an autonomous driving neural network.
+# It returns a trajectory from ExternalTrajectoryModel.
+
+log_level: INFO
+
+model:
+  model_type: external_trajectory
+  checkpoint_path: "unused"
+  device: "cpu"
+
+host: "0.0.0.0"
+port: 6789
+
+inference:
+  use_cameras: ["camera_front_wide_120fov"]
+  max_batch_size: 1
+  subsample_factor: 1
+  context_length: 1
+
+route:
+  default_command: 2
+  use_waypoint_commands: false
+
+output_dir: "."
+
+trajectory_optimizer:
+  enabled: false
+
+plot_debug_images: false

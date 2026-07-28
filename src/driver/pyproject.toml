@@ -37,6 +37,7 @@ alpamayo1 = "alpasim_driver.models.alpamayo1_model:Alpamayo1Model"
 alpamayo1_5 = "alpasim_driver.models.alpamayo1_5_model:Alpamayo15Model"
 vam = "alpasim_driver.models.vam_model:VAMModel"
 manual = "alpasim_driver.models.manual_model:ManualModel"
+external_trajectory = "alpasim_driver.models.external_trajectory_model:ExternalTrajectoryModel"
 
 [tool.uv.sources]
 vam = { git = "https://github.com/valeoai/VideoActionModel.git" }
