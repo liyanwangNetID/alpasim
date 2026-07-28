@@ -5,6 +5,9 @@ model:
   device: cpu
   tokenizer_path: null
   use_classifier_free_guidance_nav: false
+  ros_enabled: true
+  ros_topic: /alpasim/planning/ego/trajectory
+  trajectory_timeout_s: 0.5
 host: 0.0.0.0
 port: 6789
 inference:

@@ -27,6 +27,11 @@ class ModelConfig:
     tokenizer_path: str | None = None  # Only required for VAM
     use_classifier_free_guidance_nav: bool = False  # A1.5 only
 
+    # External trajectory model configuration.
+    ros_enabled: bool = False
+    ros_topic: str = "/alpasim/planning/ego/trajectory"
+    trajectory_timeout_s: float = 0.5
+
 
 @dataclass
 class InferenceConfig:

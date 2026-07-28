@@ -33,7 +33,6 @@ class ExternalTrajectoryModel(BaseTrajectoryModel):
 
     DEFAULT_HORIZON_S = 4.0
     DEFAULT_SPEED_MPS = 2.0
-    INITIAL_BUFFER_TIMEOUT_S = 3600.0
 
     @classmethod
     def from_config(
@@ -46,8 +45,6 @@ class ExternalTrajectoryModel(BaseTrajectoryModel):
     ) -> "ExternalTrajectoryModel":
         """Create an ExternalTrajectoryModel from Driver configuration."""
 
-        del model_cfg
-
         return cls(
             device=device,
             camera_ids=camera_ids,
@@ -55,6 +52,9 @@ class ExternalTrajectoryModel(BaseTrajectoryModel):
             output_frequency_hz=output_frequency_hz,
             horizon_s=cls.DEFAULT_HORIZON_S,
             target_speed_mps=cls.DEFAULT_SPEED_MPS,
+            trajectory_timeout_s=(
+                model_cfg.trajectory_timeout_s
+            ),
         )
 
     def __init__(
@@ -65,6 +65,7 @@ class ExternalTrajectoryModel(BaseTrajectoryModel):
         output_frequency_hz: int,
         horizon_s: float = DEFAULT_HORIZON_S,
         target_speed_mps: float = DEFAULT_SPEED_MPS,
+        trajectory_timeout_s: float = 0.5,
     ) -> None:
         """Initialize the external trajectory model."""
 
@@ -79,6 +80,15 @@ class ExternalTrajectoryModel(BaseTrajectoryModel):
         self._output_frequency_hz = int(output_frequency_hz)
         self._horizon_s = float(horizon_s)
         self._target_speed_mps = float(target_speed_mps)
+
+        self._trajectory_timeout_s = float(
+            trajectory_timeout_s
+        )
+
+        if self._trajectory_timeout_s <= 0.0:
+            raise ValueError(
+                "trajectory_timeout_s must be positive"
+            )
 
         if self._context_length <= 0:
             raise ValueError(
@@ -106,27 +116,18 @@ class ExternalTrajectoryModel(BaseTrajectoryModel):
         )
 
         self._trajectory_buffer = ExternalTrajectoryBuffer(
-            timeout_s=self.INITIAL_BUFFER_TIMEOUT_S,
-        )
-
-        initial_xy, initial_headings = (
-            self._build_initial_fixed_trajectory()
-        )
-
-        sequence_id = self._trajectory_buffer.update(
-            trajectory_xy=initial_xy,
-            headings=initial_headings,
+            timeout_s=self._trajectory_timeout_s,
         )
 
         logger.info(
             "Initialized ExternalTrajectoryModel: "
-            "speed=%.2f m/s, horizon=%.2f s, "
-            "frequency=%d Hz, points=%d, sequence_id=%d",
-            self._target_speed_mps,
+            "horizon=%.2f s, frequency=%d Hz, "
+            "points=%d, trajectory_timeout=%.2f s; "
+            "waiting for ROS planning trajectory",
             self._horizon_s,
             self._output_frequency_hz,
             self._num_waypoints,
-            sequence_id,
+            self._trajectory_timeout_s,
         )
 
     @property
@@ -171,48 +172,6 @@ class ExternalTrajectoryModel(BaseTrajectoryModel):
             dtype=torch.float32,
             device=self._device,
         )
-
-    def _build_initial_fixed_trajectory(
-        self,
-    ) -> tuple[np.ndarray, np.ndarray]:
-        """Build the initial straight trajectory.
-
-        The trajectory is represented in the current AlpaSim ego rig frame.
-
-        Coordinate convention:
-            positive x means forward
-            positive y means left
-            heading is measured in radians
-        """
-
-        waypoint_indices = np.arange(
-            1,
-            self._num_waypoints + 1,
-            dtype=np.float64,
-        )
-
-        time_from_start_s = np.divide(
-            waypoint_indices,
-            float(self._output_frequency_hz),
-        )
-
-        x = np.multiply(
-            self._target_speed_mps,
-            time_from_start_s,
-        )
-
-        y = np.zeros_like(x)
-
-        trajectory_xy = np.column_stack(
-            (x, y)
-        )
-
-        headings = np.zeros(
-            self._num_waypoints,
-            dtype=np.float64,
-        )
-
-        return trajectory_xy, headings
 
     def _build_stop_trajectory(
         self,

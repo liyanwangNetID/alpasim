@@ -10,6 +10,10 @@ model:
   checkpoint_path: "unused"
   device: "cpu"
 
+  ros_enabled: true
+  ros_topic: "/alpasim/planning/ego/trajectory"
+  trajectory_timeout_s: 0.5
+
 host: "0.0.0.0"
 port: 6789
 

@@ -5,6 +5,8 @@
 
 from __future__ import annotations
 
+import rclpy
+
 from alpasim_driver.external_trajectory_ros import (
     start_external_trajectory_ros_subscriber,
 )
@@ -480,9 +482,12 @@ class EgoDriverService(EgodriverServiceServicer):
         self._external_trajectory_ros_executor = None
         self._external_trajectory_ros_thread = None
 
-        if isinstance(
-            self._model,
-            ExternalTrajectoryModel,
+        if (
+            isinstance(
+                self._model,
+                ExternalTrajectoryModel,
+            )
+            and cfg.model.ros_enabled
         ):
             (
                 self._external_trajectory_ros_node,
@@ -491,21 +496,13 @@ class EgoDriverService(EgodriverServiceServicer):
                 trajectory_buffer=(
                     self._model.trajectory_buffer
                 ),
-                topic_name=(
-                    "/alpasim/planning/ego/trajectory"
-                ),
+                topic_name=cfg.model.ros_topic,
             )
 
             self._external_trajectory_ros_thread = (
                 threading.Thread(
-                    target=(
-                        self
-                        ._external_trajectory_ros_executor
-                        .spin
-                    ),
-                    name=(
-                        "external-trajectory-ros-subscriber"
-                    ),
+                    target=self._spin_external_trajectory_ros,
+                    name="external-trajectory-ros-subscriber",
                     daemon=True,
                 )
             )
@@ -514,6 +511,13 @@ class EgoDriverService(EgodriverServiceServicer):
             logger.info(
                 "Started ROS subscriber for external "
                 "planning trajectories"
+            )
+        elif isinstance(
+            self._model,
+            ExternalTrajectoryModel,
+        ):
+            logger.info(
+                "External trajectory ROS subscriber is disabled"
             )
 
         # Get context length from model or config override
@@ -574,13 +578,69 @@ class EgoDriverService(EgodriverServiceServicer):
 
         self._worker_thread.start()
 
+    def _spin_external_trajectory_ros(self) -> None:
+        """Spin the optional ROS executor until shutdown."""
+        executor = self._external_trajectory_ros_executor
+
+        if executor is None:
+            return
+
+        try:
+            executor.spin()
+        except rclpy.executors.ExternalShutdownException:
+            pass
+        except KeyboardInterrupt:
+            pass
+
     async def stop_worker(self) -> None:
-        """Signal the worker thread to stop and wait for it to exit."""
+        """Stop inference and release External Driver resources."""
+
         if not self._worker_stop.is_set():
             self._worker_stop.set()
-            self._job_queue.put_nowait(_SENTINEL_JOB)
+            self._job_queue.put_nowait(
+                _SENTINEL_JOB
+            )
+
         if self._worker_thread.is_alive():
-            await asyncio.to_thread(self._worker_thread.join)
+            await asyncio.to_thread(
+                self._worker_thread.join
+            )
+
+        # Stop the optional ROS trajectory subscriber.
+        if (
+            self._external_trajectory_ros_executor
+            is not None
+        ):
+            self._external_trajectory_ros_executor.shutdown(
+                timeout_sec=2.0
+            )
+
+        if (
+            self._external_trajectory_ros_thread
+            is not None
+            and self._external_trajectory_ros_thread.is_alive()
+        ):
+            await asyncio.to_thread(
+                self._external_trajectory_ros_thread.join,
+                2.0,
+            )
+
+        if (
+            self._external_trajectory_ros_node
+            is not None
+        ):
+            self._external_trajectory_ros_node.destroy_node()
+
+        self._external_trajectory_ros_executor = None
+        self._external_trajectory_ros_thread = None
+        self._external_trajectory_ros_node = None
+
+        if rclpy.ok():
+            rclpy.shutdown()
+
+        logger.info(
+            "External Driver worker and ROS resources stopped"
+        )
 
     def _worker_main(self) -> None:
         """Blocking worker loop that batches drive jobs for inference."""
@@ -1088,8 +1148,19 @@ async def serve(cfg: DriverConfig) -> None:
 
     try:
         await server.wait_for_termination()
+    except asyncio.CancelledError:
+        logger.info(
+            "Driver server termination was cancelled"
+        )
     finally:
+        # Clean up worker and ROS resources first.
         await service.stop_worker()
+
+        # gRPC shutdown may itself be cancelled by Ctrl+C.
+        try:
+            await server.stop(grace=0.0)
+        except asyncio.CancelledError:
+            pass
 
 
 def _run_grpc_in_thread(cfg: DriverConfig, ready_event: threading.Event) -> None:
@@ -1130,8 +1201,19 @@ def _run_grpc_in_thread(cfg: DriverConfig, ready_event: threading.Event) -> None
 
         try:
             await server.wait_for_termination()
+        except asyncio.CancelledError:
+            logger.info(
+                "Driver server termination was cancelled"
+            )
         finally:
+            # Clean up worker and ROS resources first.
             await service.stop_worker()
+
+            # gRPC shutdown may itself be cancelled by Ctrl+C.
+            try:
+                await server.stop(grace=0.0)
+            except asyncio.CancelledError:
+                pass
 
     asyncio.run(serve_with_signal())
 
