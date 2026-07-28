@@ -130,6 +130,13 @@ class ExternalTrajectoryModel(BaseTrajectoryModel):
         )
 
     @property
+    def trajectory_buffer(
+        self,
+    ) -> ExternalTrajectoryBuffer:
+        """Return the trajectory buffer shared with external producers."""
+        return self._trajectory_buffer
+
+    @property
     def camera_ids(self) -> list:
         """Return camera IDs requested by this model."""
 

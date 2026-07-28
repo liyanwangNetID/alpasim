@@ -5,6 +5,13 @@
 
 from __future__ import annotations
 
+from alpasim_driver.external_trajectory_ros import (
+    start_external_trajectory_ros_subscriber,
+)
+from alpasim_driver.models.external_trajectory_model import (
+    ExternalTrajectoryModel,
+)
+
 import asyncio
 import functools
 import logging
@@ -468,6 +475,46 @@ class EgoDriverService(EgodriverServiceServicer):
             context_length=cfg.inference.context_length,
             output_frequency_hz=cfg.inference.output_frequency_hz,
         )
+
+        self._external_trajectory_ros_node = None
+        self._external_trajectory_ros_executor = None
+        self._external_trajectory_ros_thread = None
+
+        if isinstance(
+            self._model,
+            ExternalTrajectoryModel,
+        ):
+            (
+                self._external_trajectory_ros_node,
+                self._external_trajectory_ros_executor,
+            ) = start_external_trajectory_ros_subscriber(
+                trajectory_buffer=(
+                    self._model.trajectory_buffer
+                ),
+                topic_name=(
+                    "/alpasim/planning/ego/trajectory"
+                ),
+            )
+
+            self._external_trajectory_ros_thread = (
+                threading.Thread(
+                    target=(
+                        self
+                        ._external_trajectory_ros_executor
+                        .spin
+                    ),
+                    name=(
+                        "external-trajectory-ros-subscriber"
+                    ),
+                    daemon=True,
+                )
+            )
+            self._external_trajectory_ros_thread.start()
+
+            logger.info(
+                "Started ROS subscriber for external "
+                "planning trajectories"
+            )
 
         # Get context length from model or config override
         self._context_length = (
