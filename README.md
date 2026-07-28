@@ -145,6 +145,20 @@ uv run --project src/driver python -m alpasim_driver.main \
   --config-name=external_trajectory
 
 
+uv run --project src/wizard alpasim_wizard \
+  deploy=local \
+  driver=manual \
+  driver_source=external_static \
+  topology=1gpu \
+  wizard.log_dir="$PWD/runs/external_trajectory_run_01" \
+  scenes.scene_ids='["clipgt-01d503d4-449b-46fc-8d78-9085e70d3554"]' \
+  wizard.external_services.driver='["172.23.0.1:6789"]' \
+  runtime.simulation_config.n_sim_steps=200 \
+  runtime.simulation_config.control_timestep_us=100000 \
+  runtime.simulation_config.pose_reporting_interval_us=100000 \
+  +runtime.simulation_config.realtime_factor=1.0 \
+  'runtime.simulation_config.cameras=[{height:480,width:854,logical_id:camera_cross_left_120fov,frame_interval_us:100000,shutter_duration_us:30000},{height:480,width:854,logical_id:camera_front_wide_120fov,frame_interval_us:100000,shutter_duration_us:30000},{height:480,width:854,logical_id:camera_front_tele_30fov,frame_interval_us:100000,shutter_duration_us:30000},{height:480,width:854,logical_id:camera_cross_right_120fov,frame_interval_us:100000,shutter_duration_us:30000}]'
+
 
 
 

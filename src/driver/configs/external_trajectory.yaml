@@ -3,7 +3,7 @@
 # This driver does not load an autonomous driving neural network.
 # It returns a trajectory from ExternalTrajectoryModel.
 
-log_level: INFO
+log_level: DEBUG
 
 model:
   model_type: external_trajectory
@@ -14,7 +14,8 @@ host: "0.0.0.0"
 port: 6789
 
 inference:
-  use_cameras: ["camera_front_wide_120fov"]
+  use_cameras:
+    - camera_front_wide_120fov
   max_batch_size: 1
   subsample_factor: 1
   context_length: 1

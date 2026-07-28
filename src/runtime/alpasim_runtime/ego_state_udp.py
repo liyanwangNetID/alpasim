@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+
 import json
 import math
 import socket
@@ -108,4 +110,11 @@ class EgoStateUdpExporter:
         self.socket.sendto(payload, self.destination)
 
 
-ego_state_udp_exporter = EgoStateUdpExporter()
+# ego_state_udp_exporter = EgoStateUdpExporter()
+
+ego_state_udp_exporter = EgoStateUdpExporter(
+    host=os.environ.get(
+        "ALPASIM_ROS_BRIDGE_HOST",
+        "127.0.0.1",
+    ),
+)

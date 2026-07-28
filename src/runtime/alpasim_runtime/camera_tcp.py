@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+
 import json
 import queue
 import socket
@@ -174,4 +176,11 @@ class CameraTcpExporter:
             self.socket = None
 
 
-camera_tcp_exporter = CameraTcpExporter()
+# camera_tcp_exporter = CameraTcpExporter()
+
+camera_tcp_exporter = CameraTcpExporter(
+    host=os.environ.get(
+        "ALPASIM_ROS_BRIDGE_HOST",
+        "127.0.0.1",
+    ),
+)

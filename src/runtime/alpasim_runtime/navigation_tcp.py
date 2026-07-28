@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+
 import json
 import logging
 import math
@@ -531,4 +533,11 @@ class NavigationTcpExporter:
             self.socket = None
 
 
-navigation_tcp_exporter = NavigationTcpExporter()
+# navigation_tcp_exporter = NavigationTcpExporter()
+
+navigation_tcp_exporter = NavigationTcpExporter(
+    host=os.environ.get(
+        "ALPASIM_ROS_BRIDGE_HOST",
+        "127.0.0.1",
+    ),
+)

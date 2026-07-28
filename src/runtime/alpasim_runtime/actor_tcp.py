@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+
 import json
 import queue
 import socket
@@ -122,4 +124,11 @@ class ActorTcpExporter:
             self.socket = None
 
 
-actor_tcp_exporter = ActorTcpExporter()
+# actor_tcp_exporter = ActorTcpExporter()
+
+actor_tcp_exporter = ActorTcpExporter(
+    host=os.environ.get(
+        "ALPASIM_ROS_BRIDGE_HOST",
+        "127.0.0.1",
+    ),
+)

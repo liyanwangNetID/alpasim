@@ -1,4 +1,4 @@
-log_level: INFO
+log_level: DEBUG
 model:
   model_type: external_trajectory
   checkpoint_path: unused

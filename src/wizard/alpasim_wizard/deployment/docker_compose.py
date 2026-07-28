@@ -145,8 +145,25 @@ class DockerComposeDeployment:
             ret["command"] = ["-c", command]
         if container.workdir:
             ret["working_dir"] = container.workdir
-        if container.environments:
-            ret["environment"] = container.environments
+        # if container.environments:
+        #     ret["environment"] = container.environments
+        environments = list(
+            container.environments or []
+        )
+
+        if container.name == "runtime":
+            environments.append(
+                "ALPASIM_ROS_BRIDGE_HOST="
+                "host.docker.internal"
+            )
+
+            if not use_host_network:
+                ret["extra_hosts"] = [
+                    "host.docker.internal:host-gateway"
+                ]
+
+        if environments:
+            ret["environment"] = environments
 
         addresses = container.get_all_addresses()
         publish_runtime_server_port = (
