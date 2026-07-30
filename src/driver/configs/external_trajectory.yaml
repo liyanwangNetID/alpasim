@@ -23,6 +23,7 @@ inference:
   max_batch_size: 1
   subsample_factor: 1
   context_length: 1
+  output_frequency_hz: 2
 
 route:
   default_command: 2
