@@ -209,6 +209,12 @@ services:
   # \/ the orchestrating container - only 1 needed irrespectively of however many other there are
   runtime:
     image: ${defines.base_image}
+    environments:
+      - "ALPASIM_STATIC_OCCUPANCY_ENABLED=${oc.env:ALPASIM_STATIC_OCCUPANCY_ENABLED,0}"
+      - "ALPASIM_STATIC_OCCUPANCY_PORT=${oc.env:ALPASIM_STATIC_OCCUPANCY_PORT,15006}"
+      - "ALPASIM_STATIC_OCCUPANCY_STARTUP_TIMEOUT_S=${oc.env:ALPASIM_STATIC_OCCUPANCY_STARTUP_TIMEOUT_S,30.0}"
+      - "ALPASIM_STATIC_OCCUPANCY_ACK_TIMEOUT_S=${oc.env:ALPASIM_STATIC_OCCUPANCY_ACK_TIMEOUT_S,10.0}"
+      - "ALPASIM_STATIC_OCCUPANCY_RETRY_INTERVAL_S=${oc.env:ALPASIM_STATIC_OCCUPANCY_RETRY_INTERVAL_S,0.5}"
     # \/ only starts if all the dependencies started correctly
     depends_on:
       - driver

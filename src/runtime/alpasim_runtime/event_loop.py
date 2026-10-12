@@ -41,6 +41,7 @@ from alpasim_runtime.force_gt_blend import (
     force_gt_physics_blend_hold_end_us,
 )
 from alpasim_runtime.route_generator import RouteGenerator
+from alpasim_runtime.static_occupancy_tcp import static_occupancy_tcp_exporter
 from alpasim_runtime.services.controller_service import ControllerService
 from alpasim_runtime.services.driver_service import DriverService
 from alpasim_runtime.services.physics_service import PhysicsService
@@ -640,6 +641,18 @@ class EventBasedRollout:
                 )
                 self._apply_force_gt_blend_to_seeded_ego_trajectory()
 
+            artifact_source = getattr(self.data_source, "source", None)
+            if static_occupancy_tcp_exporter.transport_config.enabled:
+                if artifact_source is None:
+                    raise RuntimeError(
+                        "Static occupancy export requires a USDZ-backed data source "
+                        "with a source path"
+                    )
+                await asyncio.to_thread(
+                    static_occupancy_tcp_exporter.prepare_and_send,
+                    usdz_path=artifact_source,
+                    scene_id=self.unbound.scene_id,
+                )
             logger.info(
                 "Session STARTING: uuid=%s scene=%s steps=%d",
                 self.unbound.rollout_uuid,
