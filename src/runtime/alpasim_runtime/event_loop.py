@@ -644,15 +644,28 @@ class EventBasedRollout:
             artifact_source = getattr(self.data_source, "source", None)
             if static_occupancy_tcp_exporter.transport_config.enabled:
                 if artifact_source is None:
-                    raise RuntimeError(
-                        "Static occupancy export requires a USDZ-backed data source "
-                        "with a source path"
+                    logger.warning(
+                        "Static occupancy unavailable: scene=%s has no USDZ source; "
+                        "continuing simulation",
+                        self.unbound.scene_id,
                     )
-                await asyncio.to_thread(
-                    static_occupancy_tcp_exporter.prepare_and_send,
-                    usdz_path=artifact_source,
-                    scene_id=self.unbound.scene_id,
-                )
+                else:
+                    async def export_static_occupancy_best_effort() -> None:
+                        try:
+                            await asyncio.to_thread(
+                                static_occupancy_tcp_exporter.prepare_and_send,
+                                usdz_path=artifact_source,
+                                scene_id=self.unbound.scene_id,
+                            )
+                        except Exception as exc:  # noqa: BLE001
+                            logger.warning(
+                                "Static occupancy unavailable for scene=%s; "
+                                "continuing simulation: %s",
+                                self.unbound.scene_id,
+                                exc,
+                            )
+
+                    asyncio.create_task(export_static_occupancy_best_effort())
             logger.info(
                 "Session STARTING: uuid=%s scene=%s steps=%d",
                 self.unbound.rollout_uuid,
